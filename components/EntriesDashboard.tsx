@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -17,9 +18,9 @@ import { Spinner } from '@/components/ui/spinner'
 import { Progress } from '@/components/ui/progress'
 import { toast } from 'sonner'
 import { 
-  Trash2, Edit, Plus, DollarSign, TrendingUp, TrendingDown, 
-  Search, Download, Users, PieChart, BarChart3, Calendar,
-  ArrowUpRight, ArrowDownRight, IndianRupee, FileSpreadsheet
+  Trash2, Edit, Plus,
+  Search, Download, Users, BarChart3,
+  ArrowUpRight, ArrowDownRight, IndianRupee, FileSpreadsheet, LogOut
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { 
@@ -59,8 +60,10 @@ const COLORS = {
 }
 
 export default function EntriesDashboard() {
+  const router = useRouter()
   const [entries, setEntries] = useState<Entry[]>([])
   const [loading, setLoading] = useState(true)
+  const [userEmail, setUserEmail] = useState<string | null>(null)
   const [showDialog, setShowDialog] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [showPersonDialog, setShowPersonDialog] = useState(false)
@@ -81,18 +84,34 @@ export default function EntriesDashboard() {
   })
 
   useEffect(() => {
+    const supabase = createClient()
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) setUserEmail(user.email ?? null)
+    })
     loadEntries()
   }, [])
+
+  const handleLogout = async () => {
+    const supabase = createClient()
+    await supabase.auth.signOut()
+    router.push('/auth/login')
+    router.refresh()
+  }
 
   const loadEntries = async () => {
     try {
       setLoading(true)
       const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
 
-      const { data, error: queryError } = await supabase
+      const query = supabase
         .from('entries')
         .select('*')
         .order('entry_date', { ascending: false })
+
+      if (user) query.eq('user_id', user.id)
+
+      const { data, error: queryError } = await query
 
       if (queryError) {
         toast.error(`Database error: ${queryError.message}`)
@@ -134,9 +153,11 @@ export default function EntriesDashboard() {
         if (updateError) throw updateError
         toast.success('Entry updated successfully')
       } else {
+        const { data: { user } } = await supabase.auth.getUser()
         const { error: insertError } = await supabase
           .from('entries')
           .insert({
+            user_id: user?.id ?? null,
             person_name: formData.person_name,
             work_description: formData.work_description,
             entry_type: formData.entry_type,
@@ -334,7 +355,10 @@ export default function EntriesDashboard() {
             <h1 className="text-3xl md:text-4xl font-bold text-white mb-1">Entry Organizer</h1>
             <p className="text-slate-400 text-sm md:text-base">Track work payments and manage your finances efficiently</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {userEmail && (
+              <span className="text-slate-400 text-sm hidden md:block truncate max-w-[200px]">{userEmail}</span>
+            )}
             <Button
               variant="outline"
               onClick={exportToCSV}
@@ -352,6 +376,14 @@ export default function EntriesDashboard() {
             >
               <Plus className="w-4 h-4 mr-2" />
               Add Entry
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleLogout}
+              className="border-rose-700 text-rose-400 hover:bg-rose-900/30 hover:text-rose-300"
+            >
+              <LogOut className="w-4 h-4 mr-2" />
+              Logout
             </Button>
           </div>
         </div>
