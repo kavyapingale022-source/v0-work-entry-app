@@ -84,12 +84,20 @@ export default function EntriesDashboard() {
   })
 
   useEffect(() => {
-    const supabase = createClient()
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) setUserEmail(user.email ?? null)
-    })
-    loadEntries()
-  }, [])
+    const checkAuthAndLoad = async () => {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      
+      if (!user) {
+        router.push('/auth/login')
+        return
+      }
+      
+      setUserEmail(user.email ?? null)
+      loadEntries()
+    }
+    checkAuthAndLoad()
+  }, [router])
 
   const handleLogout = async () => {
     const supabase = createClient()
