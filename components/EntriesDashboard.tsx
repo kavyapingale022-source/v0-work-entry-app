@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -11,11 +12,11 @@ import { Badge } from '@/components/ui/badge'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Empty } from '@/components/ui/empty'
 import { Spinner } from '@/components/ui/spinner'
 import { toast } from 'sonner'
-import { Trash2, Edit, Plus, DollarSign, TrendingUp, TrendingDown } from 'lucide-react'
+import { Trash2, Edit, Plus, DollarSign, TrendingUp, TrendingDown, LogOut } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
 interface Entry {
@@ -32,6 +33,7 @@ interface Entry {
 }
 
 export default function EntriesDashboard() {
+  const router = useRouter()
   const [entries, setEntries] = useState<Entry[]>([])
   const [loading, setLoading] = useState(true)
   const [showDialog, setShowDialog] = useState(false)
@@ -64,8 +66,7 @@ export default function EntriesDashboard() {
       const { data: { user: currentUser }, error: userError } = await supabase.auth.getUser()
       
       if (userError || !currentUser) {
-        setError('Please sign in to use this app')
-        setLoading(false)
+        router.push('/auth/login')
         return
       }
       
@@ -220,6 +221,12 @@ export default function EntriesDashboard() {
     setEditingId(null)
   }
 
+  const handleLogout = async () => {
+    const supabase = createClient()
+    await supabase.auth.signOut()
+    router.push('/auth/login')
+  }
+
   const filteredEntries = entries.filter(
     (entry) => filterType === 'all' || entry.entry_type === filterType
   )
@@ -277,9 +284,19 @@ export default function EntriesDashboard() {
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 p-6">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-white mb-2">Entry Organizer</h1>
-          <p className="text-slate-400">Track work payments and manage your finances efficiently</p>
+        <div className="flex items-start justify-between mb-8">
+          <div>
+            <h1 className="text-4xl font-bold text-white mb-2">Entry Organizer</h1>
+            <p className="text-slate-400">Track work payments and manage your finances efficiently</p>
+          </div>
+          <Button
+            variant="outline"
+            onClick={handleLogout}
+            className="border-slate-600 text-slate-300 hover:bg-slate-700"
+          >
+            <LogOut className="w-4 h-4 mr-2" />
+            Logout
+          </Button>
         </div>
 
         {/* Stats Cards */}
