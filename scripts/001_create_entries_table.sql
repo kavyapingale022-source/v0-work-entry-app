@@ -1,6 +1,7 @@
 -- Create entries table for tracking work payments
-CREATE TABLE IF NOT EXISTS entries (
+CREATE TABLE entries (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   person_name TEXT NOT NULL,
   work_description TEXT NOT NULL,
   entry_type TEXT NOT NULL CHECK (entry_type IN ('receivable', 'payable')),
@@ -12,23 +13,39 @@ CREATE TABLE IF NOT EXISTS entries (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Create index for faster queries
-CREATE INDEX IF NOT EXISTS idx_entries_person_name ON entries(person_name);
-CREATE INDEX IF NOT EXISTS idx_entries_entry_date ON entries(entry_date);
-CREATE INDEX IF NOT EXISTS idx_entries_entry_type ON entries(entry_type);
+-- Enable Row Level Security
+ALTER TABLE entries ENABLE ROW LEVEL SECURITY;
 
--- Create a function to update the updated_at timestamp
-CREATE OR REPLACE FUNCTION update_updated_at_column()
+-- Create RLS policies
+CREATE POLICY "Users can view their own entries" ON entries
+  FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can create their own entries" ON entries
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update their own entries" ON entries
+  FOR UPDATE USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete their own entries" ON entries
+  FOR DELETE USING (auth.uid() = user_id);
+
+-- Create indexes
+CREATE INDEX idx_entries_user_id ON entries(user_id);
+CREATE INDEX idx_entries_person_name ON entries(person_name);
+CREATE INDEX idx_entries_entry_date ON entries(entry_date);
+CREATE INDEX idx_entries_entry_type ON entries(entry_type);
+
+-- Create trigger function for updated_at
+CREATE OR REPLACE FUNCTION update_entries_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
   NEW.updated_at = NOW();
   RETURN NEW;
 END;
-$$ language 'plpgsql';
+$$ LANGUAGE plpgsql;
 
--- Create trigger to automatically update updated_at
-DROP TRIGGER IF EXISTS update_entries_updated_at ON entries;
+-- Create trigger
 CREATE TRIGGER update_entries_updated_at
   BEFORE UPDATE ON entries
   FOR EACH ROW
-  EXECUTE FUNCTION update_updated_at_column();
+  EXECUTE FUNCTION update_entries_updated_at();
