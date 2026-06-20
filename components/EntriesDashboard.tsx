@@ -22,7 +22,7 @@ import {
   Search, Download, Users, BarChart3,
   ArrowUpRight, ArrowDownRight, IndianRupee, FileSpreadsheet, LogOut
 } from 'lucide-react'
-import { createClient } from '@/lib/supabase/client'
+
 import { 
   PieChart as RechartsPie, Pie, Cell, ResponsiveContainer, 
   BarChart, Bar, XAxis, YAxis, Tooltip, Legend,
@@ -84,49 +84,38 @@ export default function EntriesDashboard() {
   })
 
   useEffect(() => {
-    const checkAuthAndLoad = async () => {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
+    const checkAuthAndLoad = () => {
+      const user = localStorage.getItem('currentUser')
       
       if (!user) {
         router.push('/auth/login')
         return
       }
       
-      setUserEmail(user.email ?? null)
+      setUserEmail(user)
       loadEntries()
     }
     checkAuthAndLoad()
   }, [router])
 
-  const handleLogout = async () => {
-    const supabase = createClient()
-    await supabase.auth.signOut()
+  const handleLogout = () => {
+    localStorage.removeItem('currentUser')
     router.push('/auth/login')
     router.refresh()
   }
 
-  const loadEntries = async () => {
+  const loadEntries = () => {
     try {
       setLoading(true)
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-
-      const query = supabase
-        .from('entries')
-        .select('*')
-        .order('entry_date', { ascending: false })
-
-      if (user) query.eq('user_id', user.id)
-
-      const { data, error: queryError } = await query
-
-      if (queryError) {
-        toast.error(`Database error: ${queryError.message}`)
-        return
+      const user = localStorage.getItem('currentUser')
+      const stored = localStorage.getItem('entries_' + user)
+      if (stored) {
+        const data = JSON.parse(stored) as Entry[]
+        data.sort((a, b) => new Date(b.entry_date).getTime() - new Date(a.entry_date).getTime())
+        setEntries(data)
+      } else {
+        setEntries([])
       }
-
-      setEntries(data || [])
     } catch (err) {
       toast.error('Failed to load entries')
     } finally {
@@ -134,53 +123,57 @@ export default function EntriesDashboard() {
     }
   }
 
-  const handleSave = async () => {
+  const handleSave = () => {
     if (!formData.person_name || !formData.work_description || !formData.total_amount) {
       toast.error('Please fill in all required fields')
       return
     }
 
     try {
-      const supabase = createClient()
       const totalAmount = parseFloat(formData.total_amount)
       const amountPaid = parseFloat(formData.amount_paid || '0')
+      const balanceAmount = totalAmount - amountPaid
+      const user = localStorage.getItem('currentUser')
+      
+      let currentEntries = [...entries]
 
       if (editingId) {
-        const { error: updateError } = await supabase
-          .from('entries')
-          .update({
+        const index = currentEntries.findIndex(e => e.id === editingId)
+        if (index > -1) {
+          currentEntries[index] = {
+            ...currentEntries[index],
             person_name: formData.person_name,
             work_description: formData.work_description,
             entry_type: formData.entry_type,
             total_amount: totalAmount,
             amount_paid: amountPaid,
+            balance_amount: balanceAmount,
             entry_date: formData.entry_date,
-          })
-          .eq('id', editingId)
-
-        if (updateError) throw updateError
+            updated_at: new Date().toISOString()
+          }
+        }
         toast.success('Entry updated successfully')
       } else {
-        const { data: { user } } = await supabase.auth.getUser()
-        const { error: insertError } = await supabase
-          .from('entries')
-          .insert({
-            user_id: user?.id ?? null,
-            person_name: formData.person_name,
-            work_description: formData.work_description,
-            entry_type: formData.entry_type,
-            total_amount: totalAmount,
-            amount_paid: amountPaid,
-            entry_date: formData.entry_date,
-          })
-
-        if (insertError) throw insertError
+        const newEntry: Entry = {
+          id: Math.random().toString(36).substr(2, 9),
+          person_name: formData.person_name,
+          work_description: formData.work_description,
+          entry_type: formData.entry_type,
+          total_amount: totalAmount,
+          amount_paid: amountPaid,
+          balance_amount: balanceAmount,
+          entry_date: formData.entry_date,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }
+        currentEntries.push(newEntry)
         toast.success('Entry created successfully')
       }
 
+      localStorage.setItem('entries_' + user, JSON.stringify(currentEntries))
+      setEntries(currentEntries)
       resetForm()
       setShowDialog(false)
-      await loadEntries()
     } catch (err) {
       toast.error('Failed to save entry')
     }
@@ -199,20 +192,17 @@ export default function EntriesDashboard() {
     setShowDialog(true)
   }
 
-  const handleDelete = async () => {
+  const handleDelete = () => {
     if (!deleteId) return
     try {
-      const supabase = createClient()
-      const { error: deleteError } = await supabase
-        .from('entries')
-        .delete()
-        .eq('id', deleteId)
-
-      if (deleteError) throw deleteError
+      const user = localStorage.getItem('currentUser')
+      const currentEntries = entries.filter(e => e.id !== deleteId)
+      localStorage.setItem('entries_' + user, JSON.stringify(currentEntries))
+      setEntries(currentEntries)
+      
       toast.success('Entry deleted successfully')
       setShowDeleteDialog(false)
       setDeleteId(null)
-      await loadEntries()
     } catch (err) {
       toast.error('Failed to delete entry')
     }

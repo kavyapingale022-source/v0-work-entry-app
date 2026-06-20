@@ -9,7 +9,6 @@ import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Spinner } from '@/components/ui/spinner'
 import { toast } from 'sonner'
-import { createClient } from '@/lib/supabase/client'
 import { IndianRupee, LogIn, UserPlus } from 'lucide-react'
 
 export default function LoginPage() {
@@ -25,24 +24,13 @@ export default function LoginPage() {
       return
     }
     setLoading(true)
-    try {
-      const supabase = createClient()
-      const { error } = await supabase.auth.signInWithPassword({
-        email: loginData.email,
-        password: loginData.password,
-      })
-      if (error) {
-        toast.error(error.message)
-        return
-      }
+    setTimeout(() => {
+      localStorage.setItem('currentUser', loginData.email)
       toast.success('Logged in successfully')
       router.push('/')
       router.refresh()
-    } catch {
-      toast.error('Login failed. Please try again.')
-    } finally {
       setLoading(false)
-    }
+    }, 500)
   }
 
   const handleSignup = async (e: React.FormEvent) => {
@@ -60,25 +48,13 @@ export default function LoginPage() {
       return
     }
     setLoading(true)
-    try {
-      const supabase = createClient()
-      const { error } = await supabase.auth.signUp({
-        email: signupData.email,
-        password: signupData.password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/`,
-        },
-      })
-      if (error) {
-        toast.error(error.message)
-        return
-      }
-      toast.success('Account created! Check your email to confirm, then log in.')
-    } catch {
-      toast.error('Sign up failed. Please try again.')
-    } finally {
+    setTimeout(() => {
+      localStorage.setItem('currentUser', signupData.email)
+      toast.success('Account created and logged in!')
+      router.push('/')
+      router.refresh()
       setLoading(false)
-    }
+    }, 500)
   }
 
   return (
